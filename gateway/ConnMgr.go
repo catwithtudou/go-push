@@ -33,17 +33,17 @@ func (connMgr *ConnMgr)dispatchWorkerMain(dispatchWorkerIdx int) {
 	)
 	for {
 		select {
-		case pushJob = <- connMgr.dispatchChan:
-			DispatchPending_DESC()
+		case pushJob = <- connMgr.dispatchChan: //若待分发消息队列中有消息
+			DispatchPending_DESC() //原子操作,记录任务数
 
 			// 序列化
 			if pushJob.wsMsg, err = common.EncodeWSMessage(pushJob.bizMsg); err != nil {
-				continue
+				continue //若出现错误则重新执行循环,说明任务失败
 			}
 			// 分发给所有Bucket, 若Bucket拥塞则等待
 			for bucketIdx, _ = range connMgr.buckets {
 				PushJobPending_INCR()
-				connMgr.jobChan[bucketIdx] <- pushJob
+				connMgr.jobChan[bucketIdx] <- pushJob //将消息队列直接分发至每一个桶中
 			}
 		}
 	}
@@ -91,7 +91,7 @@ func InitConnMgr() (err error) {
 		connMgr.jobChan[bucketIdx] = make(chan*PushJob, G_config.BucketJobChannelSize) // Bucket的Job队列
 		// Bucket的Job worker
 		for jobWorkerIdx = 0; jobWorkerIdx < G_config.BucketJobWorkerCount; jobWorkerIdx++ {
-			go connMgr.jobWorkerMain(jobWorkerIdx, bucketIdx)
+			go connMgr.jobWorkerMain(jobWorkerIdx, bucketIdx) //开启协程执行每个桶所含的任务
 		}
 	}
 	// 初始化分发协程, 用于将消息扇出给各个Bucket
@@ -102,12 +102,12 @@ func InitConnMgr() (err error) {
 	G_connMgr = connMgr
 	return
 }
-
+//根据连接,取出桶
 func (connMgr *ConnMgr) GetBucket(wsConnection *WSConnection) (bucket *Bucket) {
 	bucket = connMgr.buckets[wsConnection.connId % uint64(len(connMgr.buckets))]
 	return
 }
-
+//增加连接
 func (connMgr *ConnMgr) AddConn(wsConnection *WSConnection) {
 	var (
 		bucket *Bucket
@@ -118,7 +118,7 @@ func (connMgr *ConnMgr) AddConn(wsConnection *WSConnection) {
 
 	OnlineConnections_INCR()
 }
-
+//删除连接
 func (connMgr *ConnMgr) DelConn(wsConnection *WSConnection) {
 	var (
 		bucket *Bucket
@@ -129,17 +129,17 @@ func (connMgr *ConnMgr) DelConn(wsConnection *WSConnection) {
 
 	OnlineConnections_DESC()
 }
-
+//加入房间
 func (connMgr *ConnMgr) JoinRoom(roomId string, wsConn *WSConnection) (err error) {
 	var (
 		bucket *Bucket
 	)
-
+	//先获取桶,再加入桶中的房间
 	bucket = connMgr.GetBucket(wsConn)
 	err = bucket.JoinRoom(roomId, wsConn)
 	return
 }
-
+//离开房间
 func (connMgr *ConnMgr) LeaveRoom(roomId string, wsConn *WSConnection) (err error) {
 	var (
 		bucket *Bucket
@@ -156,6 +156,7 @@ func (connMgr *ConnMgr) PushAll(bizMsg *common.BizMessage) (err error) {
 		pushJob *PushJob
 	)
 
+	//增加推送任务
 	pushJob = &PushJob{
 		pushType: common.PUSH_TYPE_ALL,
 		bizMsg: bizMsg,

@@ -35,6 +35,7 @@ var (
 	G_config *Config
 )
 
+//初始化配置
 func InitConfig(filename string) (err error) {
 	var (
 		content []byte

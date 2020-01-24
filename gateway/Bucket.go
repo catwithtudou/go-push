@@ -5,6 +5,8 @@ import (
 	"github.com/owenliang/go-push/common"
 )
 
+//长连接分成多个桶
+//桶实体
 type Bucket struct {
 	rwMutex sync.RWMutex
 	index int // 我是第几个桶
@@ -12,6 +14,7 @@ type Bucket struct {
 	rooms map[string]*Room // 房间列表
 }
 
+//初始化桶结构
 func InitBucket(bucketIdx int) (bucket *Bucket) {
 	bucket = &Bucket{
 		index: bucketIdx,
@@ -21,39 +24,46 @@ func InitBucket(bucketIdx int) (bucket *Bucket) {
 	return
 }
 
+//建立连接
 func (bucket *Bucket) AddConn(wsConn *WSConnection) {
+	//使用互斥锁,保证连接唯一
 	bucket.rwMutex.Lock()
 	defer bucket.rwMutex.Unlock()
 
 	bucket.id2Conn[wsConn.connId] = wsConn
 }
 
+//删除连接
 func (bucket *Bucket) DelConn(wsConn *WSConnection) {
+	//使用互斥锁,保证连接唯一
 	bucket.rwMutex.Lock()
 	defer bucket.rwMutex.Unlock()
 
 	delete(bucket.id2Conn, wsConn.connId)
 }
 
+//加入房间,即一个房间一个桶
 func (bucket *Bucket) JoinRoom(roomId string, wsConn *WSConnection) (err error) {
 	var (
-		existed bool
+		existed bool //是否存在
 		room *Room
 	)
+	//保证加入时唯一
 	bucket.rwMutex.Lock()
 	defer bucket.rwMutex.Unlock()
 
 	// 找到房间
-	if room, existed = bucket.rooms[roomId]; !existed {
+	if room, existed = bucket.rooms[roomId]; !existed {  //若房间不存在,则建立以房间id作为桶的字典key
 		room = InitRoom(roomId)
 		bucket.rooms[roomId] = room
-		RoomCount_INCR()
+		RoomCount_INCR()  //原子性操作,房间数量+1
 	}
 	// 加入房间
 	err = room.Join(wsConn)
 	return
 }
 
+//离开房间
 func (bucket *Bucket) LeaveRoom(roomId string, wsConn *WSConnection) (err error) {
 	var (
 		existed bool
@@ -63,7 +73,7 @@ func (bucket *Bucket) LeaveRoom(roomId string, wsConn *WSConnection) (err error)
 	defer bucket.rwMutex.Unlock()
 
 	// 找到房间
-	if room, existed = bucket.rooms[roomId]; !existed {
+	if room, existed = bucket.rooms[roomId]; !existed { //若房间不存在
 		err = common.ERR_NOT_IN_ROOM
 		return
 	}
@@ -73,7 +83,7 @@ func (bucket *Bucket) LeaveRoom(roomId string, wsConn *WSConnection) (err error)
 	// 房间为空, 则删除
 	if room.Count() == 0 {
 		delete(bucket.rooms, roomId)
-		RoomCount_DESC()
+		RoomCount_DESC() //原子操作
 	}
 	return
 }

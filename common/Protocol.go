@@ -46,6 +46,7 @@ type BizLeaveData struct {
 	Room string `json:"room"`
 }
 
+//创建消息实例
 func BuildWSMessage(msgType int, msgData []byte) (wsMessage *WSMessage) {
 	return &WSMessage{
 		MsgType: msgType,
@@ -53,6 +54,7 @@ func BuildWSMessage(msgType int, msgData []byte) (wsMessage *WSMessage) {
 	}
 }
 
+//将消息编码成json格式
 func EncodeWSMessage(bizMessage *BizMessage) (wsMessage *WSMessage, err error){
 	var (
 		buf []byte
@@ -65,6 +67,7 @@ func EncodeWSMessage(bizMessage *BizMessage) (wsMessage *WSMessage, err error){
 }
 
 // 解析{"type": "PING", "data": {...}}的包
+// 解析相应的数据
 func DecodeBizMessage(buf []byte) (bizMessage *BizMessage, err error) {
 	var (
 		bizMsgObj BizMessage

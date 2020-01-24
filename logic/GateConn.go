@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"log"
 	"net/http"
 	"crypto/tls"
 	"time"
@@ -23,6 +24,8 @@ func InitGateConn(gatewayConfig *GatewayConfig) (gateConn *GateConn, err error) 
 	gateConn = &GateConn{
 		schema: "https://" + gatewayConfig.Hostname + ":" + strconv.Itoa(gatewayConfig.Port),
 	}
+
+	log.Println("https://" + gatewayConfig.Hostname + ":" + strconv.Itoa(gatewayConfig.Port))
 
 	transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true,},	// 不校验服务端证书
@@ -54,7 +57,7 @@ func (gateConn *GateConn) PushAll(itemsJson []byte) (err error) {
 
 	form = url.Values{}
 	form.Set("items", string(itemsJson))
-
+	log.Println(form)
 	for retry = 0; retry < G_config.GatewayPushRetry; retry++ {
 		if resp, err = gateConn.client.PostForm(apiUrl, form); err != nil {
 			PushFail_INCR()
